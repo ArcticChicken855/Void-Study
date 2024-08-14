@@ -7,6 +7,8 @@ from scipy.optimize import curve_fit
 
 import data_formatting
 
+print("Hi")
+
 def calculate_figure_dimensions(num_graphs):
     """
     Find the number of rows and columns necessary to fit all of the graphs.
