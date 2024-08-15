@@ -75,32 +75,38 @@ def extrapolate_root_t(temp, time, cutoff_time, max_extrapolation_time):
 
     return extrp_temp
 
-def compute_H(times, temps, nfreqs, window='none'):
+def compute_H(times, temps, nfreqs, window='none', autocorrelation=False):
     """
     This will get |H(jw)| of the thermal system.
     """
     dtime, dtemp = differentiate(temps, times)
+    f = -dtemp
+    f_time = dtime
 
-    h = np.flip(dtemp)
-    h_time = dtime
+    if autocorrelation is True:
+        autocorr = np.correlate(f, f, mode='full')
+        lags = np.arange(-len(f) + 1, len(f)) * (f_time[1]-f_time[0])
+        plt.plot(lags, autocorr)
+        plt.xlim([-1, 1])
+        plt.show()
 
     if window == 'none':
-        h_windowed = h
+        f_windowed = f
     elif window == 'blackman':
-        h_windowed = h * np.blackman(len(h))
+        f_windowed = f * np.blackman(len(f))
 
-    H = np.fft.fft(h_windowed)
-    freqs = np.fft.fftfreq(len(h_windowed), d=(times[1]-times[0]))
+    F = np.fft.fft(f_windowed)
+    freqs = np.fft.fftfreq(len(f_windowed), d=(dtime[1]-dtime[0]))
 
     # only want the positive freqs (not zero)
-    H = H[1:(len(H) // 2)]
+    F = F[1:(len(F) // 2)]
     freqs = freqs[1:(len(freqs) // 2)]
 
     # now, try dividing by 1-e^-jwD
     delay = 1
-    exp_term = 0 + 1j*freqs*2*np.pi
+    exp_term = 0 + 50j*freqs*2*np.pi
 
-    H = H / (1 - np.exp(exp_term))
+    H = F / (1 - np.exp(exp_term))
 
     return freqs, H
 
@@ -133,7 +139,7 @@ def main(excel_file_path, project_name_in_power_tester):
             temps[label][current] = extrapolate_root_t(temps[label][current], times, extrapolation_cutoff_time, max_extrapolation_time)
 
     # interpolate the data such that each point has consistent time spacing, and also set a max time
-    N = int(1E5 - 1)
+    N = int(3E5 - 1)
     max_time = max(times)
 
     s_times = np.linspace(times[0], max_time, N)
