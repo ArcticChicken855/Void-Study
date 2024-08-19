@@ -1,3 +1,5 @@
+from pathlib import Path
+import os
 import pandas as pd
 import numpy as np
 from scipy.signal import find_peaks
@@ -375,6 +377,71 @@ def plot_void_zth_r_squared_vs_time(ax, zth_time_axis, zth_data, void_data, curr
 
     return ax
 
+def plot_zth_vs_power(ax, zth_time_axis, zth_data, power_step_data, specified_time, currents='all', labels='all', print_percents=True):
+    """
+    Plot the zth at a specified time versus the power. Color each label
+    differently and make a legend. Also, make connecting lines for each
+    label.
+    """
+    # find the index of the time closest to the specified time
+    best_distance = abs(zth_time_axis.iloc[0, 0] - specified_time)
+    index_of_best = 0
+    best_time = zth_time_axis.iloc[0, 0]
+    for i, time in enumerate(zth_time_axis.iloc[:, 0]):
+        dist = abs(time - specified_time)
+        if dist < best_distance:
+            best_distance = dist
+            index_of_best = i
+            best_time = time
+
+    # if labels='all', make a list of labels to loop over
+    if labels == 'all':
+        labels = list(zth_data.keys())    
+
+    # Define a color map
+    colors = plt.cm.viridis(np.linspace(0, 1, len(labels)))
+    color_idx = 0
+
+    for label in labels:
+        # check to see if label exists
+        if label not in zth_data.keys():
+            raise ValueError(f"The specified label \'{label}\' was not detected in the dataset")
+
+        # if currents == 'all', loop over all of the currents under the label
+        if currents == 'all':
+            currents_to_test = list(zth_data[label].columns)
+        else:
+            currents_to_test = currents
+
+        zth = []
+        pwr = []
+        for current in currents_to_test:
+
+            # check to see if current exists
+            if current not in zth_data[label].columns:
+                raise ValueError(f"The specified current \'{current}\' was not detected in the dataset for the label \'{label}\'")
+            
+            zth.append(zth_data[label][current].iloc[index_of_best])
+            pwr.append(power_step_data[label][current])
+
+        ax.plot(pwr, zth, marker='o', linestyle='-', color=colors[color_idx], label=f'{label}')
+        color_idx += 1
+
+        if print_percents is True:
+            zth = np.array(zth)
+            avg = np.mean(zth)
+            differences = np.abs(zth - avg)
+            percentage_change = max(differences) / avg * 100
+            print(f't={best_time:.3g},{label}:{percentage_change:.3g}%')
+    
+    ax.legend()
+    ax.set_xlabel('Power [W]')
+    ax.set_ylabel('Zth [K / W]')
+    ax.set_title(f'Zth vs Power at t={best_time:.2g}')
+
+    return ax
+
+
 def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # get the excel file opened
     excel_sheets = pd.read_excel(excel_file_path, sheet_name=None)
@@ -517,15 +584,45 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
         axes2 = plot_void_zth_r_squared_vs_time(axes2, zth_time_axis, zth_data, void_data, current, invert_zth=True)
 
+    if ("Zth vs Power" in plots_to_show) or ('all' == plots_to_show):
+        labels_to_plot = 'all'
+        currents_to_plot = 'all'
+        times_to_plot = [0.0001, 0.001, 0.1, 1, 10, 100]
 
+        # calculate the number of graphs needed
+        num_graphs = len(times_to_plot)
+
+        # if labels='all', make a list of labels to loop over
+        if labels_to_plot == 'all':
+            labels_to_plot = list(zth_data.keys())
+
+        # get num_columns and num_rows for the figure
+        num_columns, num_rows = calculate_figure_dimensions(num_graphs)
+
+        # make the figure and flatten axes
+        fig, axes = plt.subplots(num_rows, num_columns)
+        if num_graphs > 1:
+            axes = axes.flatten()
+        else:
+            axes = [axes]
+        ax_idx = 0
+
+        # plot the figures on the axis
+        for t in times_to_plot:
+            axes[ax_idx] = plot_zth_vs_power(axes[ax_idx], zth_time_axis, zth_data, power_step_data, t, currents_to_plot, labels_to_plot)
+            ax_idx += 1
+
+        fig.suptitle("Heebee Jeebee", fontsize=16)
+        fig.subplots_adjust(hspace=0.5, wspace=0.4)
 
     plt.show()
     return
 
 
 # run command
-excel_file_path = excel_file_path = "C:\\Users\\natha\\Alabama\\baker Research\\Void Study\\Experimental Data\\Void Study FULL DOC.xlsx"
+script_dir = Path(__file__).parent
+excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=['Tau Intensity'])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=['Zth vs Power'])
 
 # add physical fit
