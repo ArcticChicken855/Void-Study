@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 from scipy.optimize import least_squares
 
-def get_chip_contour(imsize, contours, max_size_ratio=None, chip_aspect_ratio=None, max_aspect_ratio_deviation = 0.1):
+def get_chip_contour(imsize, contours, max_size_ratio=None, chip_aspect_ratio=None, max_aspect_ratio_deviation = 0.2):
     """
     Find the largest contour that fufills the conditions.
     """
@@ -35,23 +35,34 @@ def get_chip_contour(imsize, contours, max_size_ratio=None, chip_aspect_ratio=No
 
     return largest_contour
 
-def isolate_chip_region(image, dispBool=False, dispRect=False, max_size_ratio=None, chip_aspect_ratio=None):
+def isolate_chip_region(image, dispEdges=False, dispContours=False, dispRect=False, max_size_ratio=None, chip_aspect_ratio=None):
 
     """
     Take in a 2D xray of a rectangular chip. Rotate the image so that the chip is straight.
     Return the rotated image, the corners of the rectangle, and a numpy array of the pixel vals in the rectangle.
     """
+    # blur image
+    image = cv2.GaussianBlur(image, (5, 5), 0)  # Kernel size 5x5, sigma=0
 
-    # Convert to boolean image
-    mean = np.mean(image)
-    _, boolean_im = cv2.threshold(image, mean*1.0, 255, cv2.THRESH_BINARY)
-    if dispBool is True:
-        cv2.imshow('Boolean Image', boolean_im)
+    # Find edges
+    edges = cv2.Canny(image, 0, 50)
+    if dispEdges is True:
+        temp = image
+        edge_pixels = np.where(edges != 0)
+        temp[edge_pixels] = 0
+        cv2.imshow('Image with Edges', temp)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    # Find contours
-    contours, _ = cv2.findContours(boolean_im, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    # find contours
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    if dispContours is True:
+        print(len(contours))
+        temp = image
+        cv2.drawContours(temp, contours, -1, (0, 255, 0), 5)
+        cv2.imshow('Contours', temp)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
     
     # get the contour that covers the chip area
     chip_contour = get_chip_contour(image.shape[0] * image.shape[1], contours, max_size_ratio, chip_aspect_ratio)
@@ -110,7 +121,7 @@ def main():
 
     # Isolate the chip region
     aspect_ratio = 1.264
-    rotated_im, box, chip = isolate_chip_region(grey_im, dispRect=True, max_size_ratio=0.8, chip_aspect_ratio=aspect_ratio)
+    rotated_im, box, chip = isolate_chip_region(grey_im, dispEdges=True, dispContours=True, dispRect=False, max_size_ratio=0.8, chip_aspect_ratio=aspect_ratio)
 
     # Detect voids within the chip region
     void_percentage = detect_voids(chip)
