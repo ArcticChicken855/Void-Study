@@ -440,6 +440,19 @@ def plot_zth_vs_power(ax, zth_time_axis, zth_data, power_step_data, specified_ti
 
     return ax
 
+def compare_void_methods(original_data, data_to_compare):
+    """
+    Print a comparison between 2 void analysis methods.
+    """
+    for label in original_data.keys():
+        o_void = original_data[label]
+        c_void = data_to_compare[label]
+
+        difference = c_void - o_void
+        percent_change = 100 * difference / o_void
+
+        print(f'{label}: diff={difference:.3g}, change={percent_change:.2g}%')
+        
 
 def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # get the excel file opened
@@ -457,6 +470,8 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     post_thresh_void_data = excel_sheets['Post-Cycle Threshold Void Data'].iloc[0].to_dict()
     post_ps_void_data = excel_sheets['Post-Cycle Photoshop Void Data'].iloc[0].to_dict()
     void_data = pre_ps_void_data
+
+    compare_void_methods(pre_thresh_void_data, pre_ps_void_data)
 
     power_step_data = data_formatting.format_power_step(excel_sheets['Power Step'])
 
