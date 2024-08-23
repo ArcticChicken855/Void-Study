@@ -1,5 +1,4 @@
 from pathlib import Path
-import os
 import pandas as pd
 import numpy as np
 from scipy.signal import find_peaks
@@ -229,7 +228,7 @@ def plot_tau_vs_voids(ax, tau_time_axis, tau_intensity_data, void_data, tau_rang
             alpha = optimal_parameters[0]
             beta = optimal_parameters[1]
             r_naught = optimal_parameters[2]
-            print(optimal_parameters)
+            print(f'Tau: alpha={alpha}, beta={beta}, R_o={r_naught}')
             y_fit = []
             for void in void_list:
                 y_fit.append(analytical_void_equation(void, alpha, beta, r_naught))
@@ -318,7 +317,7 @@ def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, cu
             alpha = optimal_parameters[0]
             beta = optimal_parameters[1]
             r_naught = optimal_parameters[2]
-            print(optimal_parameters)
+            print(f'Zth: alpha={alpha}, beta={beta}, R_o={r_naught}')
             y_fit = []
             for void in void_list:
                 y_fit.append(analytical_void_equation(void, alpha, beta, r_naught))
@@ -453,7 +452,12 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     tau_time_axis, tau_intensity_data = data_formatting.format_timed_data(tau_formatted)
     zth_time_axis, zth_data =           data_formatting.format_timed_data(zth_formatted)
 
-    void_data = excel_sheets['Void Data'].iloc[0].to_dict()
+    pre_thresh_void_data = excel_sheets['Threshold Void Data'].iloc[0].to_dict()
+    pre_ps_void_data = excel_sheets['Photoshop Void Data'].iloc[0].to_dict()
+    post_thresh_void_data = excel_sheets['Post-Cycle Threshold Void Data'].iloc[0].to_dict()
+    post_ps_void_data = excel_sheets['Post-Cycle Photoshop Void Data'].iloc[0].to_dict()
+    void_data = pre_ps_void_data
+
     power_step_data = data_formatting.format_power_step(excel_sheets['Power Step'])
 
     # initialize settings for peak finder
@@ -557,19 +561,21 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         void_tau_fig, axes = plt.subplots(1, 1)
         tau_range = (0.7E-3, 4E-3)
         current = '24A'
-        labels = ['C5', 'C4', 'C3', 'C2', 'C1']
-        labels = ['L5', 'L4', 'L3', 'L2', 'L1']
-        axes, *_ = plot_tau_vs_voids(axes, tau_time_axis, tau_intensity_data, void_data, tau_range, current, peak_finder_settings, labels=labels, trendline='analytical', invert_tau=False)
+        ls = ['C5', 'C4', 'C3', 'C2', 'C1']
+        ls = ['L5', 'L4', 'L3', 'L2', 'L1']
+        ls = 'all'
+        axes, *_ = plot_tau_vs_voids(axes, tau_time_axis, tau_intensity_data, void_data, tau_range, current, peak_finder_settings, labels=ls, trendline='analytical', invert_tau=False)
 
     # plot voids vs zth at a specific time
     if ("Zth vs Voids" in plots_to_show) or ('all' == plots_to_show):
 
         specified_time = 2E-3
-        current = '22A'
+        current = '24A'
         void_zth_fig, axes = plt.subplots(1, 1)
-        labels = ['C5', 'C4', 'C3', 'C2', 'C1']
-        labels = ['L5', 'L4', 'L3', 'L2', 'L1']
-        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=labels, trendline='analytical')
+        ls = ['C5', 'C4', 'C3', 'C2', 'C1']
+        ls = ['L5', 'L4', 'L3', 'L2', 'L1']
+        #ls = 'all'
+        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='analytical')
 
     # plot void-zth r^2 value over time
     if ("Zth-void r-squared" in plots_to_show) or ('all' == plots_to_show):
@@ -579,10 +585,10 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
         axes = plot_void_zth_r_squared_vs_time(axes, zth_time_axis, zth_data, void_data, current)
 
-        void_zth_r_squared_fig2, axes2 = plt.subplots(1, 1)
-        current = '24A'
+        #void_zth_r_squared_fig2, axes2 = plt.subplots(1, 1)
+        #current = '24A'
 
-        axes2 = plot_void_zth_r_squared_vs_time(axes2, zth_time_axis, zth_data, void_data, current, invert_zth=True)
+        #axes2 = plot_void_zth_r_squared_vs_time(axes2, zth_time_axis, zth_data, void_data, current, invert_zth=True)
 
     if ("Zth vs Power" in plots_to_show) or ('all' == plots_to_show):
         labels_to_plot = 'all'
@@ -609,10 +615,10 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
         # plot the figures on the axis
         for t in times_to_plot:
-            axes[ax_idx] = plot_zth_vs_power(axes[ax_idx], zth_time_axis, zth_data, power_step_data, t, currents_to_plot, labels_to_plot)
+            axes[ax_idx] = plot_zth_vs_power(axes[ax_idx], zth_time_axis, zth_data, power_step_data, t, currents_to_plot, labels_to_plot, print_percents=False)
             ax_idx += 1
 
-        fig.suptitle("Heebee Jeebee", fontsize=16)
+        fig.suptitle("Zth vs Power", fontsize=16)
         fig.subplots_adjust(hspace=0.5, wspace=0.4)
 
     plt.show()
@@ -623,6 +629,6 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 script_dir = Path(__file__).parent
 excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=['Zth vs Power'])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=['Zth vs Voids'])
 
 # add physical fit
