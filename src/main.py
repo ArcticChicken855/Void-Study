@@ -471,7 +471,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     post_ps_void_data = excel_sheets['Post-Cycle Photoshop Void Data'].iloc[0].to_dict()
     void_data = pre_ps_void_data
 
-    compare_void_methods(pre_thresh_void_data, pre_ps_void_data)
+    #compare_void_methods(pre_thresh_void_data, pre_ps_void_data)
 
     power_step_data = data_formatting.format_power_step(excel_sheets['Power Step'])
 
