@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 from scipy.optimize import curve_fit
 
+import Photoshop_Void_Analysis as pva
 import data_formatting
 
 def calculate_figure_dimensions(num_graphs):
@@ -163,7 +164,7 @@ def analytical_void_equation(v, alpha, beta, r_naught):
     Enter v as a number from 0 to 100 (void percent)
     """
     v_r = v / 100
-    return r_naught + beta * (1 - (1 + alpha)*v_r) / ((1 - v_r) ** 2)
+    return r_naught + beta * (1 - alpha*v_r) / ((1 - v_r) ** 2)
 
 def plot_tau_vs_voids(ax, tau_time_axis, tau_intensity_data, void_data, tau_range, current, peak_finder_settings, invert_tau=False, labels='all', trendline='linear'):
     """
@@ -453,6 +454,23 @@ def compare_void_methods(original_data, data_to_compare):
 
         print(f'{label}: diff={difference:.3g}, change={percent_change:.2g}%')
         
+def plot_void_size_histogram(ax, image, label):
+
+    void_sizes_and_positions = pva.get_void_sizes_and_positions(image, cut=False)
+    sizes = []
+    for entry in void_sizes_and_positions:
+        sizes.append(entry[1])
+
+    ax.hist(sizes, bins=np.linspace(0, 2, 50), color='blue', edgecolor='black')
+
+    ax.set_title(label)
+    ax.set_xlabel('Void Size (% of chip area)')
+    ax.set_ylabel('Frequency')
+    ax.set_yscale('log')
+    #ax.set_xlim(0, 9)
+    #ax.set_ylim(None, 1000)
+
+    return ax
 
 def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # get the excel file opened
@@ -468,7 +486,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     pre_thresh_void_data = excel_sheets['Threshold Void Data'].iloc[0].to_dict()
     pre_ps_void_data = excel_sheets['Photoshop Void Data'].iloc[0].to_dict()
     post_thresh_void_data = excel_sheets['Post-Cycle Threshold Void Data'].iloc[0].to_dict()
-    post_ps_void_data = excel_sheets['Post-Cycle Photoshop Void Data'].iloc[0].to_dict()
+    #post_ps_void_data = excel_sheets['Post-Cycle Photoshop Void Data'].iloc[0].to_dict()
     void_data = pre_ps_void_data
 
     #compare_void_methods(pre_thresh_void_data, pre_ps_void_data)
@@ -589,8 +607,8 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         void_zth_fig, axes = plt.subplots(1, 1)
         ls = ['C5', 'C4', 'C3', 'C2', 'C1']
         ls = ['L5', 'L4', 'L3', 'L2', 'L1']
-        #ls = 'all'
-        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='analytical')
+        ls = 'all'
+        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='linear')
 
     # plot void-zth r^2 value over time
     if ("Zth-void r-squared" in plots_to_show) or ('all' == plots_to_show):
@@ -636,6 +654,40 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         fig.suptitle("Zth vs Power", fontsize=16)
         fig.subplots_adjust(hspace=0.5, wspace=0.4)
 
+    if ("Void Size Histogram" in plots_to_show) or ('all' == plots_to_show):
+
+        labels_to_plot = ['A3']
+
+        # load the images
+        image_identifier = 'vP'
+        pre_images, *_ = pva.load_images(image_identifier)
+
+        if labels_to_plot == 'all':
+            labels_to_plot = pre_images.keys()
+
+        num_graphs = len(labels_to_plot)
+        num_columns, num_rows = calculate_figure_dimensions(num_graphs)
+
+        # make the figure and flatten axes
+        fig, axes = plt.subplots(num_rows, num_columns)
+        if num_graphs > 1:
+            axes = axes.flatten()
+        else:
+            axes = [axes]
+        ax_idx = 0
+
+        # plot the figures on the axis
+        for label in labels_to_plot:
+            axes[ax_idx] = plot_void_size_histogram(axes[ax_idx], pre_images[label], label)
+            ax_idx += 1
+
+        fig.suptitle("Frequency of Void Sizes", fontsize=16)
+        fig.subplots_adjust(hspace=0.5, wspace=0.4)
+
+
+        
+
+
     plt.show()
     return
 
@@ -644,6 +696,6 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 script_dir = Path(__file__).parent
 excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=['Zth vs Voids'])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=['Void Size Histogram'])
 
 # add physical fit
