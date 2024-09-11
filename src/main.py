@@ -644,7 +644,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot the tau intensity data as well as the peaks
     if ("Tau Intensity" in plots_to_show) or ('all' == plots_to_show):
     
-        labels_to_plot = ['L3']
+        labels_to_plot = ['I1', 'I2', 'I3', 'I4']
         currents_to_plot = ['24A']
 
         # calculate the number of graphs needed
@@ -857,6 +857,6 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 script_dir = Path(__file__).parent
 excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC (LM).xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=['dZth'])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=['dZth', 'Tau Intensity'])
 
 # add physical fit
