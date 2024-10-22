@@ -90,7 +90,7 @@ def plot_tau_intensity(ax, tau_time_axis, tau_intensity_data, label, current, pe
     # set the title and axis labels
     ax.set_title(f'Tau Intensity, {label}, {current}', fontsize=12)
     ax.set_xlabel('Time [s]', fontsize=10)
-    ax.set_ylabel("Tau Intensity [K / W / -]", fontsize=10)
+    ax.set_ylabel("Tau Intensity [K / W]", fontsize=10)
 
     return ax
 
@@ -264,7 +264,7 @@ def plot_tau_vs_voids(ax, tau_time_axis, tau_intensity_data, void_data, tau_rang
     else:
         return ax, r_squared
 
-def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, current, labels='all', neighbors=0, trendline='linear', invert_zth=False, plot=True):
+def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, current, labels='all', trendline='linear', invert_zth=False, plot=True):
     """
     Make a plot of the voids vs the zth at a specific time and current
     """
@@ -297,10 +297,7 @@ def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, cu
             raise ValueError(f"The specified current \'{current}\' was not detected in the dataset for the label \'{label}\'")
             
         # add the zth into the list along with the voids
-        if neighbors > 0:
-            zth_list.append(np.mean(zth_data[label][current].iloc[index_of_best-neighbors//2 : index_of_best+neighbors//2]))
-        else:
-            zth_list.append(np.mean(zth_data[label][current].iloc[index_of_best]))
+        zth_list.append(np.mean(zth_data[label][current].iloc[index_of_best]))
         void_list.append(void_data[label])
 
     # invert zth into admittance if desired
@@ -342,11 +339,11 @@ def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, cu
             plt.text(min(void_list) + 0.4*(max(void_list) - min(void_list)), min(y_data) + 0.9*(max(y_data)-min(y_data)), f'$R^2 = {r_squared:.3f}$', fontsize=12)
 
         if invert_zth is True:
-            ax.set_title(f'Yth vs Voids at t={best_time:.3f} (s) and {current}')
+            ax.set_title(f'Yth vs Voids at t={best_time:.3g} (s) and {current}')
             ax.set_ylabel('Yth [W / K]')
             ax.set_xlabel('Void percentage')
         else:
-            ax.set_title(f'Zth vs Voids at t={best_time:.3f} (s) and {current}')
+            ax.set_title(f'Zth vs Voids at t={best_time:.3g} (s) and {current}')
             ax.set_ylabel('Zth [K / W]')
             ax.set_xlabel('Void percentage')
 
@@ -364,7 +361,7 @@ def plot_void_zth_r_squared_vs_time(ax, zth_time_axis, zth_data, void_data, curr
     """
     r_squared_list = []
     for time in zth_time_axis.iloc[:, 0]:
-        *_, r_squared = plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, time, current, labels, trendline, invert_zth=invert_zth, plot=False)
+        *_, r_squared = plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, time, current, labels, trendline=trendline, invert_zth=invert_zth, plot=False)
         r_squared_list.append(r_squared)
         
     # now plot it
@@ -499,6 +496,10 @@ def compute_weighted_walk_distance(image, weighting=None, plot=False):
     binary_mask = np.array(red_mask) // 255
 
     distance_map = ndi.distance_transform_edt(binary_mask)
+
+    cv2.imshow("Centroids Marked", distance_map)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
     white_pixels = binary_mask == 1  # Mask for white pixels
     if weighting == None:
@@ -644,7 +645,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot the tau intensity data as well as the peaks
     if ("Tau Intensity" in plots_to_show) or ('all' == plots_to_show):
     
-        labels_to_plot = ['I1', 'I2', 'I3', 'I4']
+        labels_to_plot = ['L1']
         currents_to_plot = ['24A']
 
         # calculate the number of graphs needed
@@ -688,7 +689,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot a stem plot of tau intensities over time
     if ("Tau Peaks" in plots_to_show) or ('all' == plots_to_show):
         
-        num_graphs = 6
+        num_graphs = 1
 
         # get num_columns and num_rows for the figure
         num_columns, num_rows = calculate_figure_dimensions(num_graphs)
@@ -722,12 +723,12 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         ax_idx += 1
         """
 
-        for c in ['5A', '10A', '15A', '20A', '22A', '24A']:
+        for c in ['24A']:
             if c == '5A':
                 labels = ['C4', 'C3', 'C2', 'C1', 'L5', 'L4', 'L3', 'L2', 'L1']
             else:
                 labels = 'all'
-            ylim3 = (0, 0.2)
+            ylim3 = (0, 0.05)
             axes[ax_idx] = plot_tau_peaks(axes[ax_idx], tau_time_axis, tau_intensity_data, peak_finder_settings, xlimits=xlim, ylimits=ylim3, labels=labels, currents=[c], scale_by_prominence=True)
             ax_idx += 1
         
@@ -740,18 +741,19 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         ls = ['C5', 'C4', 'C3', 'C2', 'C1']
         ls = ['L5', 'L4', 'L3', 'L2', 'L1']
         ls = 'all'
-        axes, *_ = plot_tau_vs_voids(axes, tau_time_axis, tau_intensity_data, void_data, tau_range, current, peak_finder_settings, labels=ls, trendline='analytical', invert_tau=False)
+        axes, *_ = plot_tau_vs_voids(axes, tau_time_axis, tau_intensity_data, void_data, tau_range, current, peak_finder_settings, labels=ls, trendline='linear', invert_tau=False)
 
     # plot voids vs zth at a specific time
     if ("Zth vs Voids" in plots_to_show) or ('all' == plots_to_show):
 
-        specified_time = 2E-3
+        specified_time = 1.5E-3
+        specified_time = 200
         current = '24A'
         void_zth_fig, axes = plt.subplots(1, 1)
         ls = ['C5', 'C4', 'C3', 'C2', 'C1']
         ls = ['L5', 'L4', 'L3', 'L2', 'L1']
         ls = 'all'
-        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='analytical', neighbors=0)
+        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='linear')
 
     # plot void-zth r^2 value over time
     if ("Zth-void r-squared" in plots_to_show) or ('all' == plots_to_show):
@@ -855,8 +857,8 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
 # run command
 script_dir = Path(__file__).parent
-excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC (LM).xlsx'
+excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=['dZth', 'Tau Intensity'])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth vs Power"])
 
 # add physical fit
