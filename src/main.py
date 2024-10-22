@@ -1,12 +1,14 @@
 from pathlib import Path
-import os
 import pandas as pd
 import numpy as np
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 from scipy.optimize import curve_fit
+import cv2
+import scipy.ndimage as ndi
 
+import Photoshop_Void_Analysis as pva
 import data_formatting
 
 def calculate_figure_dimensions(num_graphs):
@@ -164,7 +166,7 @@ def analytical_void_equation(v, alpha, beta, r_naught):
     Enter v as a number from 0 to 100 (void percent)
     """
     v_r = v / 100
-    return r_naught + beta * (1 - (1 + alpha)*v_r) / ((1 - v_r) ** 2)
+    return r_naught + beta * (1 - alpha*v_r) / ((1 - v_r) ** 2)
 
 def plot_tau_vs_voids(ax, tau_time_axis, tau_intensity_data, void_data, tau_range, current, peak_finder_settings, invert_tau=False, labels='all', trendline='linear'):
     """
@@ -229,7 +231,7 @@ def plot_tau_vs_voids(ax, tau_time_axis, tau_intensity_data, void_data, tau_rang
             alpha = optimal_parameters[0]
             beta = optimal_parameters[1]
             r_naught = optimal_parameters[2]
-            print(optimal_parameters)
+            print(f'Tau: alpha={alpha}, beta={beta}, R_o={r_naught}')
             y_fit = []
             for void in void_list:
                 y_fit.append(analytical_void_equation(void, alpha, beta, r_naught))
@@ -262,7 +264,7 @@ def plot_tau_vs_voids(ax, tau_time_axis, tau_intensity_data, void_data, tau_rang
     else:
         return ax, r_squared
 
-def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, current, labels='all', trendline='linear', invert_zth=False, plot=True):
+def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, current, labels='all', neighbors=0, trendline='linear', invert_zth=False, plot=True):
     """
     Make a plot of the voids vs the zth at a specific time and current
     """
@@ -295,7 +297,10 @@ def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, cu
             raise ValueError(f"The specified current \'{current}\' was not detected in the dataset for the label \'{label}\'")
             
         # add the zth into the list along with the voids
-        zth_list.append(zth_data[label][current].iloc[index_of_best])
+        if neighbors > 0:
+            zth_list.append(np.mean(zth_data[label][current].iloc[index_of_best-neighbors//2 : index_of_best+neighbors//2]))
+        else:
+            zth_list.append(np.mean(zth_data[label][current].iloc[index_of_best]))
         void_list.append(void_data[label])
 
     # invert zth into admittance if desired
@@ -318,7 +323,7 @@ def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, cu
             alpha = optimal_parameters[0]
             beta = optimal_parameters[1]
             r_naught = optimal_parameters[2]
-            print(optimal_parameters)
+            print(f'Zth: alpha={alpha}, beta={beta}, R_o={r_naught}')
             y_fit = []
             for void in void_list:
                 y_fit.append(analytical_void_equation(void, alpha, beta, r_naught))
@@ -441,6 +446,174 @@ def plot_zth_vs_power(ax, zth_time_axis, zth_data, power_step_data, specified_ti
 
     return ax
 
+def compare_void_methods(original_data, data_to_compare):
+    """
+    Print a comparison between 2 void analysis methods.
+    """
+    for label in original_data.keys():
+        o_void = original_data[label]
+        c_void = data_to_compare[label]
+
+        difference = c_void - o_void
+        percent_change = 100 * difference / o_void
+
+        print(f'{label}: diff={difference:.3g}, change={percent_change:.2g}%')
+        
+def plot_void_size_histogram(ax, image, label):
+
+    void_sizes_and_positions = pva.get_void_sizes_and_positions(image, cut=False)
+    sizes = []
+    for entry in void_sizes_and_positions:
+        sizes.append(entry[1])
+
+    ax.hist(sizes, bins=np.linspace(0, 2, 50), color='blue', edgecolor='black')
+
+    ax.set_title(label)
+    ax.set_xlabel('Void Size (% of chip area)')
+    ax.set_ylabel('Frequency')
+    ax.set_yscale('log')
+    #ax.set_xlim(0, 9)
+    #ax.set_ylim(None, 1000)
+
+    return ax
+
+def compute_weighted_walk_distance(image, weighting=None, plot=False):
+    # get the raw map
+    # Convert the image from BGR to HSV color space
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+    # Define the lower and upper bounds for red in HSV
+    # Red can span over two ranges in the HSV space
+    lower_red1 = np.array([0, 50, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 50, 50])
+    upper_red2 = np.array([180, 255, 255])
+
+    # Create masks for the two red ranges
+    mask1 = cv2.inRange(hsv_image, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv_image, lower_red2, upper_red2)
+
+    # Combine the masks
+    red_mask = cv2.bitwise_or(mask1, mask2)
+
+    binary_mask = np.array(red_mask) // 255
+
+    distance_map = ndi.distance_transform_edt(binary_mask)
+
+    white_pixels = binary_mask == 1  # Mask for white pixels
+    if weighting == None:
+        average_distance = np.mean(distance_map[white_pixels])
+
+    adjusted_distance = average_distance / (image.shape[0] * image.shape[1])
+
+    if plot is True:
+        plt.imshow(distance_map, cmap='hot')
+        plt.title(f"Distance map")
+
+    return adjusted_distance
+
+def plot_zth_vs_walk(ax, pre_images, zth_data, zth_time_axis, void_data, specified_time, labels='all', current='24A', weighting=None, trendline='linear'):
+        
+    if labels == 'all':
+        labels = list(zth_data.keys())
+
+    # find the index of the time closest to the specified time
+    best_distance = abs(zth_time_axis.iloc[0, 0] - specified_time)
+    index_of_best = 0
+    best_time = zth_time_axis.iloc[0, 0]
+    for i, time in enumerate(zth_time_axis.iloc[:, 0]):
+        dist = abs(time - specified_time)
+        if dist < best_distance:
+            best_distance = dist
+            index_of_best = i
+            best_time = time
+
+    walk_list = []
+    y_data = []
+    for label in labels:
+        y_data.append(zth_data[label][current].iloc[index_of_best])
+        walk_list.append(compute_weighted_walk_distance(pre_images[label], weighting) / void_data[label])
+            
+    # generate the trendline
+    if trendline is not None:
+        if trendline == 'linear':
+            coefficients = np.polyfit(walk_list, y_data, 1)
+            linfunc = np.poly1d(coefficients)
+            y_fit = linfunc(sorted(walk_list))
+
+        # find the R^2 value
+        correlation_matrix = np.corrcoef(y_data, y_fit)
+        correlation_xy = correlation_matrix[0, 1]
+        r_squared = correlation_xy**2
+
+    # plot it
+    ax.scatter(walk_list, y_data)
+
+    if trendline is not None:
+        ax.plot(sorted(walk_list), y_fit, color=(0.3, 0.7, 1.0), linewidth=0.8, linestyle='--')
+        plt.text(min(walk_list) + 0.4*(max(walk_list) - min(walk_list)), min(y_data) + 0.9*(max(y_data)-min(y_data)), f'$R^2 = {r_squared:.3f}$', fontsize=12)
+
+    ax.set_title(f'Walk, weight={weighting}')
+    ax.set_ylabel('Zth [K / W]')
+    ax.set_xlabel('Average walk dist / void %')
+
+    if trendline is None:
+        return ax
+    else:
+        return ax, r_squared
+
+def plot_dZth(ax, zth_time_axis, zth_data, labels, current, time_scaling='t', mode='normal'):
+
+    # if labels='all', make a list of labels to loop over
+    if labels == 'all':
+        labels = list(zth_data.keys()) 
+
+    # convert time axis to numpy array
+    if time_scaling == 't':
+        time = zth_time_axis['Time [s]'].to_numpy(dtype=np.float64)
+    elif time_scaling == 'z':
+        time = np.log(zth_time_axis['Time [s]'].to_numpy(dtype=np.float64))
+
+    if mode == 'deviation':
+        deez = np.zeros(shape=(len(labels), len(time)))
+        print(np.shape(deez))
+        deez_idx = 0
+    for label in labels:
+        zth = zth_data[label][current].to_numpy(dtype=np.float64)
+        dZth = np.zeros_like(zth)
+        # Central difference for interior points
+        dZth[1:-1] = (zth[2:] - zth[:-2]) / (time[2:] - time[:-2])
+
+        # Forward difference for the first point
+        dZth[0] = (zth[1] - zth[0]) / (time[1] - time[0])
+
+        # Backward difference for the last point
+        dZth[-1] = (zth[-1] - zth[-2]) / (time[-1] - time[-2])
+
+        if mode == 'deviation':
+            deez[deez_idx] = dZth
+            deez_idx += 1
+        else:
+            ax.plot(time, dZth, label=label)
+
+    if mode == 'deviation':
+        dZth_avg = np.mean(deez, axis=0)
+        deez_idx = 0
+
+        for label in labels:
+            plt.plot(np.exp(time), deez[deez_idx] - dZth_avg, label=label)
+            deez_idx += 1
+
+    ax.set_title(f"dZth/d{time_scaling}, mode={mode}, scaling={time_scaling}")
+    ax.legend()
+    ax.set_xlabel(f"Time (s)")
+
+    ax.set_xscale('log')
+
+
+    return ax
+
+
 
 def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # get the excel file opened
@@ -453,7 +626,14 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     tau_time_axis, tau_intensity_data = data_formatting.format_timed_data(tau_formatted)
     zth_time_axis, zth_data =           data_formatting.format_timed_data(zth_formatted)
 
-    void_data = excel_sheets['Void Data'].iloc[0].to_dict()
+    pre_thresh_void_data = excel_sheets['Threshold Void Data'].iloc[0].to_dict()
+    pre_ps_void_data = excel_sheets['Photoshop Void Data'].iloc[0].to_dict()
+    post_thresh_void_data = excel_sheets['Post-Cycle Threshold Void Data'].iloc[0].to_dict()
+    #post_ps_void_data = excel_sheets['Post-Cycle Photoshop Void Data'].iloc[0].to_dict()
+    void_data = pre_thresh_void_data
+
+    #compare_void_methods(pre_thresh_void_data, pre_ps_void_data)
+
     power_step_data = data_formatting.format_power_step(excel_sheets['Power Step'])
 
     # initialize settings for peak finder
@@ -464,7 +644,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot the tau intensity data as well as the peaks
     if ("Tau Intensity" in plots_to_show) or ('all' == plots_to_show):
     
-        labels_to_plot = ['L3']
+        labels_to_plot = ['I1', 'I2', 'I3', 'I4']
         currents_to_plot = ['24A']
 
         # calculate the number of graphs needed
@@ -557,19 +737,21 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         void_tau_fig, axes = plt.subplots(1, 1)
         tau_range = (0.7E-3, 4E-3)
         current = '24A'
-        labels = ['C5', 'C4', 'C3', 'C2', 'C1']
-        labels = ['L5', 'L4', 'L3', 'L2', 'L1']
-        axes, *_ = plot_tau_vs_voids(axes, tau_time_axis, tau_intensity_data, void_data, tau_range, current, peak_finder_settings, labels=labels, trendline='analytical', invert_tau=False)
+        ls = ['C5', 'C4', 'C3', 'C2', 'C1']
+        ls = ['L5', 'L4', 'L3', 'L2', 'L1']
+        ls = 'all'
+        axes, *_ = plot_tau_vs_voids(axes, tau_time_axis, tau_intensity_data, void_data, tau_range, current, peak_finder_settings, labels=ls, trendline='analytical', invert_tau=False)
 
     # plot voids vs zth at a specific time
     if ("Zth vs Voids" in plots_to_show) or ('all' == plots_to_show):
 
         specified_time = 2E-3
-        current = '22A'
+        current = '24A'
         void_zth_fig, axes = plt.subplots(1, 1)
-        labels = ['C5', 'C4', 'C3', 'C2', 'C1']
-        labels = ['L5', 'L4', 'L3', 'L2', 'L1']
-        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=labels, trendline='analytical')
+        ls = ['C5', 'C4', 'C3', 'C2', 'C1']
+        ls = ['L5', 'L4', 'L3', 'L2', 'L1']
+        ls = 'all'
+        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='analytical', neighbors=0)
 
     # plot void-zth r^2 value over time
     if ("Zth-void r-squared" in plots_to_show) or ('all' == plots_to_show):
@@ -579,10 +761,10 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
         axes = plot_void_zth_r_squared_vs_time(axes, zth_time_axis, zth_data, void_data, current)
 
-        void_zth_r_squared_fig2, axes2 = plt.subplots(1, 1)
-        current = '24A'
+        #void_zth_r_squared_fig2, axes2 = plt.subplots(1, 1)
+        #current = '24A'
 
-        axes2 = plot_void_zth_r_squared_vs_time(axes2, zth_time_axis, zth_data, void_data, current, invert_zth=True)
+        #axes2 = plot_void_zth_r_squared_vs_time(axes2, zth_time_axis, zth_data, void_data, current, invert_zth=True)
 
     if ("Zth vs Power" in plots_to_show) or ('all' == plots_to_show):
         labels_to_plot = 'all'
@@ -609,11 +791,63 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
         # plot the figures on the axis
         for t in times_to_plot:
-            axes[ax_idx] = plot_zth_vs_power(axes[ax_idx], zth_time_axis, zth_data, power_step_data, t, currents_to_plot, labels_to_plot)
+            axes[ax_idx] = plot_zth_vs_power(axes[ax_idx], zth_time_axis, zth_data, power_step_data, t, currents_to_plot, labels_to_plot, print_percents=False)
             ax_idx += 1
 
-        fig.suptitle("Heebee Jeebee", fontsize=16)
+        fig.suptitle("Zth vs Power", fontsize=16)
         fig.subplots_adjust(hspace=0.5, wspace=0.4)
+
+    if ("Void Size Histogram" in plots_to_show) or ('all' == plots_to_show):
+
+        labels_to_plot = ['A3']
+
+        # load the images
+        image_identifier = 'vP'
+        pre_images, *_ = pva.load_images(image_identifier)
+
+        if labels_to_plot == 'all':
+            labels_to_plot = pre_images.keys()
+
+        num_graphs = len(labels_to_plot)
+        num_columns, num_rows = calculate_figure_dimensions(num_graphs)
+
+        # make the figure and flatten axes
+        fig, axes = plt.subplots(num_rows, num_columns)
+        if num_graphs > 1:
+            axes = axes.flatten()
+        else:
+            axes = [axes]
+        ax_idx = 0
+
+        # plot the figures on the axis
+        for label in labels_to_plot:
+            axes[ax_idx] = plot_void_size_histogram(axes[ax_idx], pre_images[label], label)
+            ax_idx += 1
+
+        fig.suptitle("Frequency of Void Sizes", fontsize=16)
+        fig.subplots_adjust(hspace=0.5, wspace=0.4)
+
+    if ("dZth" in plots_to_show) or ('all' == plots_to_show):
+
+        fig, axes = plt.subplots()
+
+        labels = 'all'
+
+        axes = plot_dZth(axes, zth_time_axis, zth_data, labels, current='24A', time_scaling='z', mode='deviation')
+
+    if ("Weighted Walk Distance" in plots_to_show) or ('all' == plots_to_show):
+
+        labels_to_plot = 'all'
+
+        # load the images
+        image_identifier = 'vP'
+        pre_images, *_ = pva.load_images(image_identifier)
+
+        fig, axes = plt.subplots()
+
+        specified_time = 2E-3
+        axes = plot_zth_vs_walk(axes, pre_images, zth_data, zth_time_axis, void_data, specified_time, labels='all', current='24A', weighting=None, trendline='linear')
+        compute_weighted_walk_distance(pre_images['A3'], weighting='root')
 
     plt.show()
     return
@@ -621,8 +855,8 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
 # run command
 script_dir = Path(__file__).parent
-excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC.xlsx'
+excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC (LM).xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=['Zth vs Power'])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=['dZth', 'Tau Intensity'])
 
 # add physical fit
