@@ -77,7 +77,7 @@ def find_parameters(input_voltages, currents):
 
 def main():
     project_dir = Path(__file__).parent.parent
-    excel_file_path = project_dir / r'Non-code' / r'Void Study IV Curve.xlsx'
+    excel_file_path = project_dir / r'Experimental Data' / r'Void Study IV Curve.xlsx'
 
     df = pd.read_excel(excel_file_path)
     
