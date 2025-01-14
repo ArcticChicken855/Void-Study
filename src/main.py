@@ -339,11 +339,11 @@ def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, cu
             plt.text(min(void_list) + 0.4*(max(void_list) - min(void_list)), min(y_data) + 0.9*(max(y_data)-min(y_data)), f'$R^2 = {r_squared:.3f}$', fontsize=12)
 
         if invert_zth is True:
-            ax.set_title(f'Yth vs Voids at t={best_time:.3g} (s) and {current}')
+            ax.set_title(f'Yth vs Voids at t={best_time:.3g} s and {current}')
             ax.set_ylabel('Yth [W / K]')
             ax.set_xlabel('Void percentage')
         else:
-            ax.set_title(f'Zth vs Voids at t={best_time:.3g} (s) and {current}')
+            ax.set_title(f'Zth vs Voids at t={best_time:.3g} s and {current}')
             ax.set_ylabel('Zth [K / W]')
             ax.set_xlabel('Void percentage')
 
@@ -425,7 +425,7 @@ def plot_zth_vs_power(ax, zth_time_axis, zth_data, power_step_data, specified_ti
             
             zth.append(zth_data[label][current].iloc[index_of_best])
             pwr.append(power_step_data[label][current])
-
+        print((max(zth)-min(zth))/(sum(zth)/len(zth))*100)
         ax.plot(pwr, zth, marker='o', linestyle='-', color=colors[color_idx], label=f'{label}')
         color_idx += 1
 
@@ -590,7 +590,7 @@ def plot_dZth(ax, zth_time_axis, zth_data, labels, current, time_scaling='t', mo
 
         # Backward difference for the last point
         dZth[-1] = (zth[-1] - zth[-2]) / (time[-1] - time[-2])
-
+        dZth = np.convolve(dZth, [0.4, 0.8, 1, 0.8, 0.4], mode='same')
         if mode == 'deviation':
             deez[deez_idx] = dZth
             deez_idx += 1
@@ -608,7 +608,8 @@ def plot_dZth(ax, zth_time_axis, zth_data, labels, current, time_scaling='t', mo
     ax.set_title(f"dZth/d{time_scaling}, mode={mode}, scaling={time_scaling}")
     ax.legend()
     ax.set_xlabel(f"Time (s)")
-
+    ax.set_ylabel(f"Deviation of dZth/dt (K/W*s)")
+    ax.axvline(x=0.01, color='blue', linestyle='--', linewidth=1, label="x = 0.008")
     ax.set_xscale('log')
 
 
@@ -746,8 +747,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot voids vs zth at a specific time
     if ("Zth vs Voids" in plots_to_show) or ('all' == plots_to_show):
 
-        specified_time = 1.5E-3
-        specified_time = 200
+        specified_time = 300
         current = '24A'
         void_zth_fig, axes = plt.subplots(1, 1)
         ls = ['C5', 'C4', 'C3', 'C2', 'C1']
@@ -859,6 +859,6 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 script_dir = Path(__file__).parent
 excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth vs Power"])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth vs Voids"])
 
 # add physical fit
