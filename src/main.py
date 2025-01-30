@@ -859,6 +859,6 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 script_dir = Path(__file__).parent
 excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth vs Voids"])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=["Tau Intensity"])
 
 # add physical fit

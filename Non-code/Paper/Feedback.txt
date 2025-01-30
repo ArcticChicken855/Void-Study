@@ -1,0 +1,4 @@
+Highlight what the actual impact of the work is.
+Make sure to discuss the void detection method.
+Try to find a way to account for the distribution of void sizes.
+Use thermal impedance instead of resistance.
