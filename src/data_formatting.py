@@ -14,14 +14,18 @@ def extract_test_conditions_from_string(default_string, project_name_in_power_te
     spaced_str = default_string.replace('_', ' ')
     split_str = spaced_str.split()
     current = split_str[3 + project_name_length]
-    position = split_str[7 + project_name_length]
 
-    if position == "pos1":
+    if split_str[5 + project_name_length] == 'ch1':
         label = split_str[4 + project_name_length]
-    elif position == "pos2":
-        label = split_str[5 + project_name_length]
     else:
-        raise NameError("Position is invalid")
+        position = split_str[7 + project_name_length]
+
+        if position == "pos1":
+            label = split_str[4 + project_name_length]
+        elif position == "pos2":
+            label = split_str[5 + project_name_length]
+        else:
+            raise NameError("Position is invalid")
     
     formatted_string = f'{label},{current}'
     return formatted_string
@@ -79,9 +83,9 @@ def format_timed_data(input_dataframe):
             dataframe_to_modify = dict_of_dataframes[label]
 
             if current in dataframe_to_modify:
-                raise ValueError("Excel sheet has multiple entries with the same label and current")
+                raise ValueError(f"Excel sheet has multiple entries with the same label and current ({label},{current})")
             else:
-                column_to_add = input_dataframe.iloc[1:, i+1]
+                column_to_add = pd.to_numeric(input_dataframe.iloc[1:, i+1])
                 dataframe_to_modify[current] = column_to_add
 
     return (time_axis, dict_of_dataframes)

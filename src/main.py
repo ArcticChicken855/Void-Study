@@ -134,7 +134,7 @@ def plot_tau_peaks(ax, tau_time_axis, tau_intensity_data, peak_finder_settings, 
                     prominence_sum[absolute_index] += 1
 
     # plot the data
-    markerline, stemlines, baseline = ax.stem(tau_time_axis.iloc[:, 0], prominence_sum)
+    markerline, stemlines, baseline = ax.stem(tau_time_axis.iloc[:, 0], prominence_sum, 'g')
     #plt.setp(markerline, 'markersize', 0)
     #plt.setp(stemlines, 'linewidth', 3)
 
@@ -155,7 +155,7 @@ def plot_tau_peaks(ax, tau_time_axis, tau_intensity_data, peak_finder_settings, 
         ax.set_ylabel("Sum of prominence")
     else:
         ax.set_title(f'Number of Tau peaks vs time')
-        ax.set_ylabel("# of peaks")
+        ax.set_ylabel("Number of peaks")
 
     ax.set_xlabel('Time [s]')
 
@@ -335,7 +335,7 @@ def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, cu
         ax.scatter(void_list, y_data)
 
         if trendline is not None:
-            ax.plot(sorted(void_list), sorted(y_fit), color=(0.3, 0.7, 1.0), linewidth=0.8, linestyle='--')
+            ax.plot(sorted(void_list), sorted(y_fit), color='red', linewidth=0.8, linestyle='--')
             plt.text(min(void_list) + 0.4*(max(void_list) - min(void_list)), min(y_data) + 0.9*(max(y_data)-min(y_data)), f'$R^2 = {r_squared:.3f}$', fontsize=12)
 
         if invert_zth is True:
@@ -350,9 +350,9 @@ def plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, specified_time, cu
         ax.xaxis.set_major_formatter(mtick.PercentFormatter(xmax=100, decimals=0))
 
     if trendline is None:
-        return ax
+        return ax, coefficients
     else:
-        return ax, r_squared
+        return ax, coefficients, r_squared
 
 def plot_void_zth_r_squared_vs_time(ax, zth_time_axis, zth_data, void_data, current, labels='all', trendline='linear', invert_zth=False):
     """
@@ -376,6 +376,51 @@ def plot_void_zth_r_squared_vs_time(ax, zth_time_axis, zth_data, void_data, curr
 
     ax.set_xlabel("Time (s)")
     ax.set_ylabel(f'R^2')
+
+    return ax
+
+def plot_delZ_delV_vs_time(ax, zth_time_axis, zth_data, void_data, current, labels='all', normalization=None):
+    """
+    plot of the first coefficient of the line of best fit over time (maybe normalized wrt the average rth at that time, or the Rth at zero voids)
+    """
+    coeff_list = []
+    for time in zth_time_axis.iloc[:, 0]:
+        temp, coefficients, r_squared = plot_zth_vs_voids(ax, zth_time_axis, zth_data, void_data, time, current, labels, trendline='linear', invert_zth=False, plot=False)
+
+        if normalization == 'y-intercept':
+            coeff_list.append(coefficients[0] / coefficients[1])
+            title_str = "ΔZth/ΔVoid over time, normalized with the Zth at zero voids"
+        elif normalization == 'average':
+            average_voids = np.mean(list(void_data.values()))
+            average_rth = coefficients[1] + average_voids * coefficients[0]
+            coeff_list.append(coefficients[0] / average_rth)
+            title_str = "ΔZth/ΔVoid over time, normalized with the average Zth at that time"
+            ax.set_xlim([0.3E-3, 100])
+            ax.set_ylim([0, 0.006])
+        elif isinstance(normalization, int):
+            impact = 100 * coefficients[0] * normalization / (coefficients[1] + coefficients[0]*normalization)
+            coeff_list.append(impact)
+            ax.set_xlim([0.3E-3, 100])
+            ax.set_ylim([0, int(normalization/2)+1])
+        else:
+            coeff_list.append(coefficients[0])
+            title_str = "ΔZth/ΔVoid over time"
+
+    # now plot it
+    if isinstance(normalization, int):
+        ax.plot(zth_time_axis.iloc[:, 0], coeff_list, 'purple')
+        ax.set_xscale('log')
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel('Impact score')
+        ax.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=100, decimals=0))
+        ax.set_title(f"Percentage of Zth that can be explained by voids at {normalization}% voiding level")
+
+    else:
+        ax.plot(zth_time_axis.iloc[:, 0], coeff_list, 'purple')
+        ax.set_title(title_str)
+        ax.set_xscale('log')
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel('ΔZth/ΔVoid')
 
     return ax
 
@@ -575,10 +620,10 @@ def plot_dZth(ax, zth_time_axis, zth_data, labels, current, time_scaling='t', mo
     elif time_scaling == 'z':
         time = np.log(zth_time_axis['Time [s]'].to_numpy(dtype=np.float64))
 
-    if mode == 'deviation':
+    if mode == 'deviation' or mode == 'stddev' or mode == 'sum_of_difference':
         deez = np.zeros(shape=(len(labels), len(time)))
-        print(np.shape(deez))
         deez_idx = 0
+
     for label in labels:
         zth = zth_data[label][current].to_numpy(dtype=np.float64)
         dZth = np.zeros_like(zth)
@@ -591,7 +636,7 @@ def plot_dZth(ax, zth_time_axis, zth_data, labels, current, time_scaling='t', mo
         # Backward difference for the last point
         dZth[-1] = (zth[-1] - zth[-2]) / (time[-1] - time[-2])
         dZth = np.convolve(dZth, [0.4, 0.8, 1, 0.8, 0.4], mode='same')
-        if mode == 'deviation':
+        if mode == 'deviation' or mode == 'stddev' or mode == 'sum_of_difference':
             deez[deez_idx] = dZth
             deez_idx += 1
         else:
@@ -604,6 +649,22 @@ def plot_dZth(ax, zth_time_axis, zth_data, labels, current, time_scaling='t', mo
         for label in labels:
             plt.plot(np.exp(time), deez[deez_idx] - dZth_avg, label=label)
             deez_idx += 1
+    
+    if mode == 'stddev':
+        stddev = np.std(deez, axis=0, ddof=1)
+        plt.plot(np.exp(time), stddev)
+    
+    if mode == 'sum_of_difference':
+        SOD = []
+        dZth_avg = np.mean(deez, axis=0)
+        for i in range(np.shape(deez)[1]):
+            sum = 0
+            for j in range(np.shape(deez)[0]):
+                sum += np.abs(dZth_avg[i] - deez[j, i])
+            
+            SOD.append(sum / np.shape(deez)[0])
+
+        plt.plot(np.exp(time), SOD)
 
     ax.set_title(f"dZth/d{time_scaling}, mode={mode}, scaling={time_scaling}")
     ax.legend()
@@ -612,6 +673,10 @@ def plot_dZth(ax, zth_time_axis, zth_data, labels, current, time_scaling='t', mo
     ax.axvline(x=0.01, color='blue', linestyle='--', linewidth=1, label="x = 0.008")
     ax.set_xscale('log')
 
+    if mode == 'stddev':
+        ax.set_ylabel(f'Standard deviation of dZth/dt (K/W*s)')
+    elif mode == 'sum_of_difference':
+        ax.set_ylabel(f'Sum of differences of dZth/dt (K/W*s)')
 
     return ax
 
@@ -628,11 +693,17 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     tau_time_axis, tau_intensity_data = data_formatting.format_timed_data(tau_formatted)
     zth_time_axis, zth_data =           data_formatting.format_timed_data(zth_formatted)
 
+    labels_to_exclude = []
+    labels_to_exclude = ['I1', 'I2', 'I3', 'I4']
+    for label in labels_to_exclude:
+        del tau_intensity_data[label]
+        del zth_data[label]
+
     pre_thresh_void_data = excel_sheets['Threshold Void Data'].iloc[0].to_dict()
     pre_ps_void_data = excel_sheets['Photoshop Void Data'].iloc[0].to_dict()
     post_thresh_void_data = excel_sheets['Post-Cycle Threshold Void Data'].iloc[0].to_dict()
     #post_ps_void_data = excel_sheets['Post-Cycle Photoshop Void Data'].iloc[0].to_dict()
-    void_data = pre_thresh_void_data
+    void_data = pre_ps_void_data
 
     #compare_void_methods(pre_thresh_void_data, pre_ps_void_data)
 
@@ -646,7 +717,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot the tau intensity data as well as the peaks
     if ("Tau Intensity" in plots_to_show) or ('all' == plots_to_show):
     
-        labels_to_plot = ['L1']
+        labels_to_plot = ['A3']
         currents_to_plot = ['24A']
 
         # calculate the number of graphs needed
@@ -690,6 +761,9 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot a stem plot of tau intensities over time
     if ("Tau Peaks" in plots_to_show) or ('all' == plots_to_show):
         
+        currents = ['24A']
+        labels = 'all'
+
         num_graphs = 1
 
         # get num_columns and num_rows for the figure
@@ -704,9 +778,9 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         ax_idx = 0
 
         # make the plots
-        xlim = (min(zth_time_axis.iloc[:, 0]), 1E-2)
+        xlim = (min(zth_time_axis.iloc[:, 0]), max(zth_time_axis.iloc[:, 0]))
         ylim1 = (0, 0.25)
-        ylim2 = (0, 10)
+        ylim2 = (0, 15)
 
         """
         axes[ax_idx] = plot_tau_peaks(axes[ax_idx], tau_time_axis, tau_intensity_data, peak_finder_settings, xlimits=xlim, ylimits=ylim1, labels='all', currents='all', scale_by_prominence=True)
@@ -724,13 +798,8 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         ax_idx += 1
         """
 
-        for c in ['24A']:
-            if c == '5A':
-                labels = ['C4', 'C3', 'C2', 'C1', 'L5', 'L4', 'L3', 'L2', 'L1']
-            else:
-                labels = 'all'
-            ylim3 = (0, 0.05)
-            axes[ax_idx] = plot_tau_peaks(axes[ax_idx], tau_time_axis, tau_intensity_data, peak_finder_settings, xlimits=xlim, ylimits=ylim3, labels=labels, currents=[c], scale_by_prominence=True)
+        for c in currents:
+            axes[ax_idx] = plot_tau_peaks(axes[ax_idx], tau_time_axis, tau_intensity_data, peak_finder_settings, xlimits=xlim, ylimits=ylim2, labels=labels, currents=[c], scale_by_prominence=False)
             ax_idx += 1
         
     # plot voids vs tau time
@@ -747,7 +816,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot voids vs zth at a specific time
     if ("Zth vs Voids" in plots_to_show) or ('all' == plots_to_show):
 
-        specified_time = 300
+        specified_time = 1000
         current = '24A'
         void_zth_fig, axes = plt.subplots(1, 1)
         ls = ['C5', 'C4', 'C3', 'C2', 'C1']
@@ -835,7 +904,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
         labels = 'all'
 
-        axes = plot_dZth(axes, zth_time_axis, zth_data, labels, current='24A', time_scaling='z', mode='deviation')
+        axes = plot_dZth(axes, zth_time_axis, zth_data, labels, current='24A', time_scaling='z', mode='sum_of_difference')
 
     if ("Weighted Walk Distance" in plots_to_show) or ('all' == plots_to_show):
 
@@ -851,14 +920,22 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
         axes = plot_zth_vs_walk(axes, pre_images, zth_data, zth_time_axis, void_data, specified_time, labels='all', current='24A', weighting=None, trendline='linear')
         compute_weighted_walk_distance(pre_images['A3'], weighting='root')
 
+    if ("delZ_delV" in plots_to_show) or ('all' == plots_to_show):
+
+        fig, axes = plt.subplots(1, 1)
+        current = '24A'
+        norm = 15
+
+        axes = plot_delZ_delV_vs_time(axes, zth_time_axis, zth_data, void_data, current, labels='all', normalization=norm)
+
     plt.show()
     return
 
 
 # run command
 script_dir = Path(__file__).parent
-excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC.xlsx'
+excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC v2.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=["Tau Intensity"])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth-void r-squared"])
 
 # add physical fit

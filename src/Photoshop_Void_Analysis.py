@@ -153,7 +153,6 @@ def main():
     
     # calculate voids for all images
     pre_voids, post_voids = void_all_images(pre_images_full, post_images_full, cut=False)
-    print(pre_voids)
 
     writeToExcel = False
     if writeToExcel is True:
