@@ -481,7 +481,7 @@ def plot_zth_vs_power(ax, zth_time_axis, zth_data, power_step_data, specified_ti
             percentage_change = max(differences) / avg * 100
             print(f't={best_time:.3g},{label}:{percentage_change:.3g}%')
     
-    ax.legend()
+    #ax.legend()
     ax.set_xlabel('Power [W]')
     ax.set_ylabel('Zth [K / W]')
     ax.set_title(f'Zth vs Power at t={best_time:.2g}')
@@ -695,6 +695,11 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 
     labels_to_exclude = []
     labels_to_exclude = ['I1', 'I2', 'I3', 'I4']
+    #labels_to_exclude.extend(['A5', 'A4', 'A3', 'A2', 'A1'])
+    #labels_to_exclude.extend(['B1', 'B2', 'B3', 'B4', 'B5'])
+    #labels_to_exclude.extend(['C1', 'C2', 'C3', 'C4', 'C5'])
+    #labels_to_exclude.extend(['D1', 'D2', 'D3', 'D4', 'D5'])
+    #labels_to_exclude.extend(['L1', 'L2', 'L3', 'L4', 'L5'])
     for label in labels_to_exclude:
         del tau_intensity_data[label]
         del zth_data[label]
@@ -816,13 +821,13 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot voids vs zth at a specific time
     if ("Zth vs Voids" in plots_to_show) or ('all' == plots_to_show):
 
-        specified_time = 1000
+        specified_time = 7E-3
         current = '24A'
         void_zth_fig, axes = plt.subplots(1, 1)
         ls = ['C5', 'C4', 'C3', 'C2', 'C1']
         ls = ['L5', 'L4', 'L3', 'L2', 'L1']
         ls = 'all'
-        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='linear')
+        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='analytical')
 
     # plot void-zth r^2 value over time
     if ("Zth-void r-squared" in plots_to_show) or ('all' == plots_to_show):
@@ -840,7 +845,7 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     if ("Zth vs Power" in plots_to_show) or ('all' == plots_to_show):
         labels_to_plot = 'all'
         currents_to_plot = 'all'
-        times_to_plot = [0.0001, 0.001, 0.1, 1, 10, 100]
+        times_to_plot = [1000]
 
         # calculate the number of graphs needed
         num_graphs = len(times_to_plot)
@@ -936,6 +941,6 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 script_dir = Path(__file__).parent
 excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC v2.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth-void r-squared"])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth vs Power"])
 
 # add physical fit
