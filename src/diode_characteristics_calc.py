@@ -74,13 +74,11 @@ def Is_temp_dependence_eqn(T, a, r, p):
     beta = 1108
     k = 8.61733E-5 # boltzmann constant in eV
 
-
     Eg = Eg0-alpha*T**2/(T+beta) # in eV
 
     # compute Is
-    Is = a*T**r * np.exp(-p*Eg/(k*T))
+    Is = a*T**r * np.exp(-p*Eg0/(k*T))
     return Is
-
 
 def find_diode_parameters(input_voltages, currents):
     """
@@ -153,7 +151,7 @@ def plot_IV_curve(currents, voltages, Is, n, R_ext):
     fig, ax = plt.subplots()
 
     ax.scatter(voltages, currents, label='Experimental', color='blue')
-    ax.plot(c_voltages, c_currents, label='Curve-fit', color='red')
+    ax.semilogy(c_voltages, c_currents, label='Curve-fit', color='red')
 
     ax.set_xlabel('Vd (V)')
     ax.set_ylabel('Id (A)')
@@ -194,12 +192,11 @@ def main():
     reverse_currents = df['Reverse Current (uA)'].to_numpy()
     temperatures = df['Temperature (K)'].to_numpy()
 
-
     # find Is temp dependence params
     a, r, p = find_Is_params(reverse_currents, temperatures)
 
     # make plots
-    #plot_Is(reverse_currents, temperatures, a, r, p)
+    plot_Is(reverse_currents, temperatures, a, r, p)
     plot_IV_curve(currents, input_voltages, Is, n, R_ext)
 
     print(f'A={a:.3g}, r={r:.3g}, p={p:.3g}')
@@ -210,5 +207,18 @@ def main():
     for power in pwr:
         engy += power * 150E-6
 
-    print(engy)
+    print(f"Total energy: {engy}")
 main()
+
+"""
+Why this doesn't work:
+In a diode, there are actually four separate currents that contribute to the overall forward current: 
+Low level depletion region recombination Ir
+Low-level injection Il
+High-level injection Ih
+Emitter recombination currents Ih
+The relevant ones for a power diode IV curve are Il and Ih.
+At low forward currents, the injected minority carrier concentration is less than the majority carrier concentration, which gives Il.
+At high forward currents, the injected minority carrier concentration is equal to or greater than the majority carrier concentration, which gies Ih.
+As you approach this point, the IV curve deviates from the expected exponential, the curve bends down as seen in the IV curve data.
+"""
