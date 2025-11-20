@@ -821,13 +821,13 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
     # plot voids vs zth at a specific time
     if ("Zth vs Voids" in plots_to_show) or ('all' == plots_to_show):
 
-        specified_time = 7E-3
+        specified_time = 1E-4
         current = '24A'
         void_zth_fig, axes = plt.subplots(1, 1)
         ls = ['C5', 'C4', 'C3', 'C2', 'C1']
         ls = ['L5', 'L4', 'L3', 'L2', 'L1']
         ls = 'all'
-        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='analytical')
+        axes, *_ = plot_zth_vs_voids(axes, zth_time_axis, zth_data, void_data, specified_time, current, labels=ls, trendline='linear')
 
     # plot void-zth r^2 value over time
     if ("Zth-void r-squared" in plots_to_show) or ('all' == plots_to_show):
@@ -941,6 +941,6 @@ def main(excel_file_path, project_name_in_power_tester, plots_to_show):
 script_dir = Path(__file__).parent
 excel_file_path = script_dir.parent / 'Experimental Data' / 'Void Study FULL DOC v2.xlsx'
 project_name_in_power_tester = "NAHANS VOID STUDY"
-main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth vs Power"])
+main(excel_file_path, project_name_in_power_tester, plots_to_show=["Zth vs Voids"])
 
 # add physical fit
